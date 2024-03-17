@@ -21,6 +21,7 @@ from train import encoder
 from sendmail import send_email
 import sqlite3
 import bcrypt
+import subprocess
 
 # Initialize SQLite database
 conn = sqlite3.connect('users.db')
@@ -65,6 +66,10 @@ def login(username, password):
 facenet = InceptionResNetV2()
 base_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)),'MTCNN')
 path = os.path.join(base_dir,"model/Facenet_keras_weights.h5")
+
+if not os.path.isfile(path):
+    subprocess.run([f'curl --output {path} "https://media.githubusercontent.com/media/ShyamaleeT/glaucocare/main/sep_5.h5"'], shell=True)
+
 facenet.load_weights(path)
 file_path = os.path.join(base_dir,'name_list.txt')
 # Create name_list.txt file if it doesn't exist
@@ -377,6 +382,20 @@ def live_video():
 
     cap.release()
 
+def get_known_count():
+    known_videos_dir = os.path.join(base_dir, "Video")
+    known_videos = [f for f in os.listdir(known_videos_dir) if os.path.isfile(os.path.join(known_videos_dir, f))]
+    return len(known_videos)
+
+def update_name_list(new_name):
+    # Append the new name to the in-memory list
+    if new_name not in name_list:
+        name_list.append(new_name)
+
+    # Write the updated list to the file
+    with open(file_path, "w") as f:
+        for name in name_list:
+            f.write(f"{name}\n")
 
 
 def main():
@@ -389,7 +408,7 @@ def main():
     
         options = ['Capture 15sec Video','Train Face Data', 'Recognise Face image', 'Live Detect']
         selected_option = st.selectbox("Choose an option", options)
-
+        
         if selected_option == 'Capture 15sec Video':
             capture_15sec_video()
 
@@ -477,6 +496,38 @@ def main():
         # For Video sending to mail use below Elif Statement
         elif selected_option == 'Live Detect':
                 live_video()
+        # Show unknown videos at the start of login
+        unknown_videos_dir = os.path.join(base_dir, "unknown_videos")
+        unknown_videos = [f for f in os.listdir(unknown_videos_dir) if os.path.isfile(os.path.join(unknown_videos_dir, f))]
+
+        if unknown_videos:
+            st.subheader("Unknown Videos")
+            known_count = get_known_count()  # Get the current count of known videos
+
+            # Create a grid layout for videos, 4 per row
+            columns = st.columns(4)
+            column_index = 0
+
+            for i, video in enumerate(unknown_videos):
+                # Display video in the next column
+                with columns[column_index]:
+                    st.video(os.path.join(unknown_videos_dir, video))
+                    if st.button(f"Mark as Known {video}", key=video):
+                        known_count += 1
+                        new_name = f"known_{known_count}"
+                        new_video_name = f"{new_name}.mp4"
+                        known_video_path = os.path.join(base_dir, "Video", new_video_name)
+                        
+                        # Move and rename the video
+                        os.rename(os.path.join(unknown_videos_dir, video), known_video_path)
+                        update_name_list(new_name)  # Update name_list.txt with the new name
+                        
+                        st.success(f"Moved {video} to known videos as {new_video_name}")
+                        st.rerun()  # Rerun the script to refresh the dashboard
+
+                # Move to the next column, and wrap back to the first column if necessary
+                column_index = (column_index + 1) % 4
+
 
     elif auth_status == "login_failed":
         st.error("Login failed. Please check your username and password.")

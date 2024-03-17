@@ -204,13 +204,13 @@ def live_detect():
 
                     # Save the face image every 5 minutes
                     current_time = time.time()
-                    if current_time - last_image_saved_time >= 1* 60:  # 5 minutes in seconds
+                    if current_time - last_image_saved_time >= 1 * 60:  # 5 minutes in seconds
                         face_image_path = os.path.join(unknown_images_dir, f"unknown_{time.strftime('%Y%m%d-%H%M%S')}.jpg")
                         face_image.save(face_image_path)
                         last_image_saved_time = current_time
             current_time = time.time()
             # Check if 30 minutes have passed since the last email
-            if current_time - last_email_sent_time >= 1* 60:  # 30 minutes in seconds
+            if current_time - last_email_sent_time >= 1 * 60:  # 30 minutes in seconds
                 try:
                     st.write(f'start:{face_image_path}')
                     # Send an email with the latest unknown face image
@@ -286,8 +286,8 @@ def live_video():
                     recognition_result = (prob, name)
                     unknown_detected = False
                 else:
-                    cv2.rectangle(frame, (x, y), (x+width, y+height), (0, 255, 0), 2)
-                    cv2.putText(frame, 'Unknown', (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+                    # cv2.rectangle(frame, (x, y), (x+width, y+height), (0, 255, 0), 2)
+                    # cv2.putText(frame, 'Unknown', (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
                     recognition_result = (prob, "Unknown")
                     if not unknown_detected:
                         unknown_detected = True
@@ -308,7 +308,7 @@ def live_video():
                 
                 # Check if 30 minutes have passed since the last email
                 current_time = time.time()
-                if current_time - last_email_sent_time >= 1* 60:  # 30 minutes in seconds
+                if current_time - last_email_sent_time >= 1 * 60:  # 30 minutes in seconds
                     try:
                         # Send an email with the latest unknown video
                         send_email(video_path)
@@ -335,6 +335,21 @@ def live_video():
             break
 
     cap.release()
+
+def get_known_count():
+    known_videos_dir = os.path.join(base_dir, "Video")
+    known_videos = [f for f in os.listdir(known_videos_dir) if os.path.isfile(os.path.join(known_videos_dir, f))]
+    return len(known_videos)
+
+def update_name_list(new_name):
+    # Append the new name to the in-memory list
+    if new_name not in name_list:
+        name_list.append(new_name)
+
+    # Write the updated list to the file
+    with open(file_path, "w") as f:
+        for name in name_list:
+            f.write(f"{name}\n")
 
 def main():
     global train_X, train_y, test_X, test_y,X_train , y_train , X_test, y_test
@@ -457,8 +472,37 @@ def main():
     elif selected_option == 'Live Detect':
             live_video()
 
+    # Show unknown videos at the start of login
+    unknown_videos_dir = os.path.join(base_dir, "unknown_videos")
+    unknown_videos = [f for f in os.listdir(unknown_videos_dir) if os.path.isfile(os.path.join(unknown_videos_dir, f))]
 
+    if unknown_videos:
+        st.subheader("Unknown Videos")
+        known_count = get_known_count()  # Get the current count of known videos
 
+        # Create a grid layout for videos, 4 per row
+        columns = st.columns(4)
+        column_index = 0
+
+        for i, video in enumerate(unknown_videos):
+            # Display video in the next column
+            with columns[column_index]:
+                st.video(os.path.join(unknown_videos_dir, video))
+                if st.button(f"Mark as Known {video}", key=video):
+                    known_count += 1
+                    new_name = f"known_{known_count}"
+                    new_video_name = f"{new_name}.mp4"
+                    known_video_path = os.path.join(base_dir, "Video", new_video_name)
+                    
+                    # Move and rename the video
+                    os.rename(os.path.join(unknown_videos_dir, video), known_video_path)
+                    update_name_list(new_name)  # Update name_list.txt with the new name
+                    
+                    st.success(f"Moved {video} to known videos as {new_video_name}")
+                    st.rerun()  # Rerun the script to refresh the dashboard
+
+            # Move to the next column, and wrap back to the first column if necessary
+            column_index = (column_index + 1) % 4
     
 if __name__ == '__main__':
     main()
